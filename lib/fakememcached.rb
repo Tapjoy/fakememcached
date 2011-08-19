@@ -65,7 +65,7 @@ class FakeMemcached
   alias :decr :decrement
 
   def append(key, value)
-    set(key, get(key, true).to_s + value.to_s, nil, true)
+    set(key, get(key, false).to_s + value.to_s, nil, false)
   end
   
   def delete(key)

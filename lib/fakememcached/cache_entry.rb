@@ -1,4 +1,4 @@
-class FakeMemcache
+class FakeMemcached
   class CacheEntry
     attr_reader :value
     
