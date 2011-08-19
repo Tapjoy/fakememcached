@@ -3,7 +3,8 @@ require 'fakememcached/cache_entry'
 class FakeMemcached
   def initialize(servers = nil, opts = {})
     @servers = servers
-    @default_ttl = options[:default_ttl] || 1_000_000
+    @default_ttl = opts[:default_ttl] || 1_000_000
+    @data = {}
   end
 
   # NOT IMPLEMENTED:
@@ -22,7 +23,7 @@ class FakeMemcached
   alias :namespace :prefix_key
   
   def set(key, value, ttl = nil, marshal = true, flags = nil)
-    self[key] = CacheEntry.new(value, ttl.nil? || ttl.zero? ? @default_ttl : ttl, marshal)
+    @data[key] = CacheEntry.new(value, ttl.nil? || ttl.zero? ? @default_ttl : ttl, marshal)
   end
 
   def add(key, value, ttl = @default_ttl, marshal = true, flags = nil)
@@ -36,30 +37,30 @@ class FakeMemcached
 
   def get(key, marshal = true)
     if key.is_a?(Array)
-      slice(*key).collect { |k,v| [k, v.unmarshal] }.to_hash_without_nils
+      @data.slice(*key).collect { |k,v| [k, v.unmarshal] }.to_hash_without_nils
     else
       return nil unless has_unexpired_key?(key)
       
       if marshal
-        self[key].unmarshal
+        @data[key].unmarshal
       else
-        self[key].value
+        @data[key].value
       end
     end
   end
 
   def increment(key, offset = 1)
     if has_unexpired_key?(key)
-      self[key].increment(offset)
-      self[key].to_i
+      @data[key].increment(offset)
+      @data[key].to_i
     end
   end
   alias :incr :increment
 
   def decrement(key, amount = 1)
     if has_unexpired_key?(key)
-      self[key].decrement(amount)
-      self[key].to_i
+      @data[key].decrement(amount)
+      @data[key].to_i
     end
   end
   alias :decr :decrement
@@ -69,7 +70,7 @@ class FakeMemcached
   end
   
   def delete(key)
-    super(key) if has_unexpired_key?(key)
+    @data.delete(key) if has_unexpired_key?(key)
   end
 
   def servers
@@ -77,7 +78,7 @@ class FakeMemcached
   end
 
   def flush
-    clear
+    @data.clear
   end
   alias :flush_all :flush
 
@@ -91,6 +92,6 @@ class FakeMemcached
 
   private
     def has_unexpired_key?(key)
-      has_key?(key) && !self[key].expired?
+      @data.has_key?(key) && !@data[key].expired?
     end
 end
