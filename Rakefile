@@ -10,6 +10,7 @@ begin
     gem.email = "viximo-eng@viximo.com"
     gem.homepage = "http://viximo.com"
     gem.authors = ["Viximo"]
+    gem.license = "APACHE"
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError
