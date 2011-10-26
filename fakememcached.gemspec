@@ -18,6 +18,12 @@ Gem::Specification.new do |s|
   s.summary = %q{An in-memory hash implementation of memcached}
   s.license = "APACHE"
   
+  s.files = Dir[
+    "README.rdoc",
+    "LICENSE",
+    "lib/**/*"
+  ]
+  
   s.add_development_dependency(%q<rspec>, ["~> 1.3.0"])
 end
 
