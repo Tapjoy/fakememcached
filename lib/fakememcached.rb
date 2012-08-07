@@ -1,14 +1,42 @@
 require 'fakememcached/cache_entry'
 
+# Does not:
+# * Respect prefix keys
+# * Check for key lengths
 class FakeMemcached
+  attr_reader :options
+
   def initialize(servers = nil, opts = {})
-    @default_ttl = opts[:default_ttl] || 1_000_000
+    @options = Memcached::DEFAULTS.merge(opts)
+    @options.delete_if {|k, v| !Memcached::DEFAULTS.keys.include?(k)}
+    @default_ttl = options[:default_ttl]
     @data = {}
+
+    if servers == nil || servers == []
+      if ENV.key?('MEMCACHE_SERVERS')
+        servers = ENV['MEMCACHE_SERVERS'].split(',').map {|s| s.strip}
+      else
+        servers = '127.0.0.1:11211'
+      end
+    end
+
     set_servers(servers)
-    set_prefix_key(opts[:prefix_key] || opts[:namespace])
+    set_prefix_key(options[:prefix_key] || options[:namespace])
+
+    # Freeze the hash
+    options.freeze
   end
 
   def set_servers(servers)
+    if servers
+      # Validate format
+      servers.each do |server|
+        if !server.is_a?(String) || File.socket?(server) || server =~ /^[\w\d\.-]+(:\d{1,5}){0,2}$/
+          raise ArgumentError, "Servers must be either in the format 'host:port[:weight]' (e.g., 'localhost:11211' or  'localhost:11211:10') for a network server, or a valid path to a Unix domain socket (e.g., /var/run/memcached)."
+        end
+      end
+    end
+
     @servers = servers
   end
 
@@ -16,8 +44,12 @@ class FakeMemcached
     @servers || []
   end
 
-  def set_prefix_key(prefix_key)
-    @prefix_key = prefix_key
+  def set_prefix_key(key)
+    if key
+      @prefix_key = key + options[:prefix_delimiter]
+    else
+      @prefix_key = ''
+    end
   end
   alias :set_namespace :set_prefix_key
 
@@ -77,6 +109,8 @@ class FakeMemcached
   end
 
   def cas(key, ttl = @default_ttl, marshal = true, flags = nil)
+    raise Memcached::ClientError, 'CAS not enabled for this Memcached instance' unless options[:support_cas]
+
     value = get(key, marshal)
     new_value = yield(value)
     if get(key, marshal) == value
