@@ -62,18 +62,19 @@ class FakeMemcached
   
   def reset(current_servers = nil)
     set_servers(current_servers) if current_servers
+    servers
   end
 
   def set(key, value, ttl = @default_ttl, marshal = true, flags = nil)
     data[key] = CacheEntry.new(value, ttl.nil? || ttl.zero? ? @default_ttl : ttl, marshal)
+    nil
   end
 
   def add(key, value, ttl = @default_ttl, marshal = true, flags = nil)
     if has_unexpired_key?(key)
-      "NOT_STORED\r\n"
+      raise Memcached::NotStored
     else
       set(key, value, ttl, marshal, flags)
-      "STORED\r\n"
     end
   end
 
@@ -81,6 +82,8 @@ class FakeMemcached
     if has_unexpired_key?(key)
       data[key].increment(offset)
       data[key].to_i
+    else
+      raise Memcached::NotFound
     end
   end
 
@@ -88,6 +91,8 @@ class FakeMemcached
     if has_unexpired_key?(key)
       data[key].decrement(amount)
       data[key].to_i
+    else
+      raise Memcached::NotFound
     end
   end
 
@@ -95,7 +100,7 @@ class FakeMemcached
   alias :decr :decrement
 
   def replace(key, value, ttl = @default_ttl, marshal = true, flags = nil)
-    if data.include?(key)
+    if has_unexpired_key?(key)
       set(key, value, ttl, marshal, flags)
     else
       raise Memcached::NotFound
@@ -103,11 +108,19 @@ class FakeMemcached
   end
 
   def append(key, value)
-    set(key, get(key, false).to_s + value.to_s, nil, false)
+    if has_unexpired_key?(key)
+      set(key, get(key, false).to_s + value.to_s, nil, false)
+    else
+      raise Memcached::NotFound
+    end
   end
 
   def prepend(key, value)
-    set(key, value.to_s + get(key, false).to_s, nil, false)
+    if has_unexpired_key?(key)
+      set(key, value.to_s + get(key, false).to_s, nil, false)
+    else
+      raise Memcached::NotFound
+    end
   end
 
   def cas(key, ttl = @default_ttl, marshal = true, flags = nil)
@@ -125,11 +138,17 @@ class FakeMemcached
   alias :compare_and_swap :cas
   
   def delete(key)
-    data.delete(key) if has_unexpired_key?(key)
+    if has_unexpired_key?(key)
+      data.delete(key)
+      nil
+    else
+      raise Memcached::NotFound
+    end
   end
 
   def flush
     data.clear
+    nil
   end
   alias :flush_all :flush
 
@@ -144,14 +163,14 @@ class FakeMemcached
   def get(key, marshal = true)
     if key.is_a?(Array)
       data.slice(*key).collect { |k,v| [k, v.unmarshal] }.to_hash_without_nils
-    else
-      return nil unless has_unexpired_key?(key)
-      
+    elsif has_unexpired_key?(key)
       if marshal
         data[key].unmarshal
       else
         data[key].value
       end
+    else
+      raise Memcached::NotFound
     end
   end
   alias :get_from_last :get
