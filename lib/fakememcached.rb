@@ -31,7 +31,7 @@ class FakeMemcached
     if servers
       # Validate format
       servers.each do |server|
-        if !server.is_a?(String) || File.socket?(server) || server =~ /^[\w\d\.-]+(:\d{1,5}){0,2}$/
+        unless server.is_a?(String) && (File.socket?(server) || server =~ /^[\w\d\.-]+(:\d{1,5}){0,2}$/)
           raise ArgumentError, "Servers must be either in the format 'host:port[:weight]' (e.g., 'localhost:11211' or  'localhost:11211:10') for a network server, or a valid path to a Unix domain socket (e.g., /var/run/memcached)."
         end
       end
