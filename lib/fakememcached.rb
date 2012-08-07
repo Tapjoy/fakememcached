@@ -6,17 +6,18 @@ require 'fakememcached/cache_entry'
 class FakeMemcached
   attr_reader :options
 
+  @@server_data = {}
+
   def initialize(servers = nil, opts = {})
     @options = Memcached::DEFAULTS.merge(opts)
     @options.delete_if {|k, v| !Memcached::DEFAULTS.keys.include?(k)}
     @default_ttl = options[:default_ttl]
-    @data = {}
 
     if servers == nil || servers == []
       if ENV.key?('MEMCACHE_SERVERS')
         servers = ENV['MEMCACHE_SERVERS'].split(',').map {|s| s.strip}
       else
-        servers = '127.0.0.1:11211'
+        servers = ['127.0.0.1:11211']
       end
     end
 
@@ -28,12 +29,13 @@ class FakeMemcached
   end
 
   def set_servers(servers)
-    if servers
-      # Validate format
-      servers.each do |server|
-        unless server.is_a?(String) && (File.socket?(server) || server =~ /^[\w\d\.-]+(:\d{1,5}){0,2}$/)
-          raise ArgumentError, "Servers must be either in the format 'host:port[:weight]' (e.g., 'localhost:11211' or  'localhost:11211:10') for a network server, or a valid path to a Unix domain socket (e.g., /var/run/memcached)."
-        end
+    # Validate format
+    servers = Array(servers)
+    servers.each do |server|
+      if server.is_a?(String) && (File.socket?(server) || server =~ /^[\w\d\.-]+(:\d{1,5}){0,2}$/)
+        @@server_data[server] ||= {}
+      else
+        raise ArgumentError, "Servers must be either in the format 'host:port[:weight]' (e.g., 'localhost:11211' or  'localhost:11211:10') for a network server, or a valid path to a Unix domain socket (e.g., /var/run/memcached)."
       end
     end
 
@@ -41,7 +43,7 @@ class FakeMemcached
   end
 
   def servers
-    @servers || []
+    @servers
   end
 
   def set_prefix_key(key)
@@ -54,7 +56,7 @@ class FakeMemcached
   alias :set_namespace :set_prefix_key
 
   def prefix_key
-    @prefix_key || ''
+    @prefix_key
   end
   alias :namespace :prefix_key
   
@@ -63,7 +65,7 @@ class FakeMemcached
   end
 
   def set(key, value, ttl = @default_ttl, marshal = true, flags = nil)
-    @data[key] = CacheEntry.new(value, ttl.nil? || ttl.zero? ? @default_ttl : ttl, marshal)
+    data[key] = CacheEntry.new(value, ttl.nil? || ttl.zero? ? @default_ttl : ttl, marshal)
   end
 
   def add(key, value, ttl = @default_ttl, marshal = true, flags = nil)
@@ -77,15 +79,15 @@ class FakeMemcached
 
   def increment(key, offset = 1)
     if has_unexpired_key?(key)
-      @data[key].increment(offset)
-      @data[key].to_i
+      data[key].increment(offset)
+      data[key].to_i
     end
   end
 
   def decrement(key, amount = 1)
     if has_unexpired_key?(key)
-      @data[key].decrement(amount)
-      @data[key].to_i
+      data[key].decrement(amount)
+      data[key].to_i
     end
   end
 
@@ -93,7 +95,7 @@ class FakeMemcached
   alias :decr :decrement
 
   def replace(key, value, ttl = @default_ttl, marshal = true, flags = nil)
-    if @data.include?(key)
+    if data.include?(key)
       set(key, value, ttl, marshal, flags)
     else
       raise Memcached::NotFound
@@ -123,11 +125,11 @@ class FakeMemcached
   alias :compare_and_swap :cas
   
   def delete(key)
-    @data.delete(key) if has_unexpired_key?(key)
+    data.delete(key) if has_unexpired_key?(key)
   end
 
   def flush
-    @data.clear
+    data.clear
   end
   alias :flush_all :flush
 
@@ -141,21 +143,21 @@ class FakeMemcached
 
   def get(key, marshal = true)
     if key.is_a?(Array)
-      @data.slice(*key).collect { |k,v| [k, v.unmarshal] }.to_hash_without_nils
+      data.slice(*key).collect { |k,v| [k, v.unmarshal] }.to_hash_without_nils
     else
       return nil unless has_unexpired_key?(key)
       
       if marshal
-        @data[key].unmarshal
+        data[key].unmarshal
       else
-        @data[key].value
+        data[key].value
       end
     end
   end
   alias :get_from_last :get
 
   def server_by_key(key)
-    servers.first
+    server
   end
 
   def stats(subcommand = nil)
@@ -163,7 +165,17 @@ class FakeMemcached
   end
 
   private
+    def data
+      @@server_data[server]
+    end
+
+    # All data goes into the first server in the list -- no hash algorithm in
+    # use here to distribute it
+    def server
+      servers[0]
+    end
+
     def has_unexpired_key?(key)
-      @data.has_key?(key) && !@data[key].expired?
+      data.has_key?(key) && !data[key].expired?
     end
 end
