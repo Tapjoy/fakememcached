@@ -126,13 +126,18 @@ class FakeMemcached
   def cas(key, ttl = @default_ttl, marshal = true, flags = nil)
     raise Memcached::ClientError, 'CAS not enabled for this Memcached instance' unless options[:support_cas]
 
-    initial = get(key, false)
-    value = get(key, marshal)
-    new_value = yield(value)
-    if get(key, false) == initial
-      set(key, new_value, ttl, marshal, flags)
+    if has_unexpired_key?(key)
+      initial = get(key, false)
+      value = get(key, marshal)
+      new_value = yield(value)
+
+      if get(key, false) == initial
+        set(key, new_value, ttl, marshal, flags)
+      else
+        raise Memcached::ConnectionDataExists
+      end
     else
-      raise Memcached::NotStored
+      raise Memcached::NotFound
     end
   end
   alias :compare_and_swap :cas
