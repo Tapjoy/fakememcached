@@ -1,5 +1,6 @@
 # -*- encoding: utf-8 -*-
-require 'lib/fakememcached/version'
+$LOAD_PATH.unshift File.expand_path('../lib', __FILE__)
+require 'fakememcached/version'
 
 Gem::Specification.new do |s|
   s.name = %q{fakememcached}
