@@ -59,7 +59,7 @@ class FakeMemcached
     @prefix_key
   end
   alias :namespace :prefix_key
-  
+
   def reset(current_servers = nil)
     set_servers(current_servers) if current_servers
     servers
@@ -141,7 +141,7 @@ class FakeMemcached
     end
   end
   alias :compare_and_swap :cas
-  
+
   def delete(key)
     if has_unexpired_key?(key)
       data.delete(key)
@@ -167,7 +167,7 @@ class FakeMemcached
 
   def get(key, marshal = true)
     if key.is_a?(Array)
-      data.slice(*key).collect { |k,v| [k, v.unmarshal] }.to_hash_without_nils
+      Hash[data.slice(*key).collect { |k,v| [k, v.unmarshal] }.reject { |pair| pair.second.nil? }]
     elsif has_unexpired_key?(key)
       if marshal
         data[key].unmarshal
