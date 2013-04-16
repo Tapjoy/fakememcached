@@ -8,9 +8,21 @@ class FakeMemcached
 
   @@server_data = {}
 
+  LOCAL_DEFAULTS = {:default_ttl => 10, :prefix_delimiter => ''}
+
   def initialize(servers = nil, opts = {})
-    @options = Memcached::DEFAULTS.merge(opts)
-    @options.delete_if {|k, v| !Memcached::DEFAULTS.keys.include?(k)}
+    @options = {}
+
+    if defined?(Memcached::DEFAULTS)
+      @options = Memcached::DEFAULTS.merge(opts)
+      @options.delete_if { |k, v| !Memcached::DEFAULTS.keys.include?(k) }
+    else
+      #Jruby memcached does not have the magic constant DEFAULTS.
+      #added this to help with this case.
+      @options = LOCAL_DEFAULTS.merge(opts)
+      @options.delete_if { |k, v| !LOCAL_DEFAULTS.keys.include?(k) }
+    end
+
     @default_ttl = options[:default_ttl]
 
     if servers == nil || servers == []
